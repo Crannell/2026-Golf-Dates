@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Golf Trip Planner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --green-deep: #0e2110;
+  --green:      #1a3a1a;
+  --gold:       #c9a84c;
+  --gold-light: #e2c97e;
+  --cream:      #f5f0e8;
+  --muted:      #8aaa8a;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--green-deep);
+  color: var(--cream);
+  min-height: 100vh;
+}
+
+/* LOADING */
+#loading-overlay {
+  position: fixed; inset: 0; background: var(--green-deep);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 999; transition: opacity .4s;
+}
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.loader-icon { font-size: 52px; animation: spin 1.5s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading-overlay p { margin-top: 16px; color: var(--muted); font-size: 15px; }
+
+/* HEADER */
+header {
+  background: linear-gradient(180deg, #060f06 0%, var(--green) 100%);
+  border-bottom: 2px solid var(--gold);
+  padding: 32px 20px 22px; text-align: center;
+}
+header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(26px, 6vw, 50px);
+  color: var(--gold); letter-spacing: 3px;
+}
+header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+/* ADMIN BTN */
+#admin-btn {
+  position: fixed; top: 14px; right: 14px; z-index: 200;
+  background: rgba(201,168,76,.12); border: 1px solid rgba(201,168,76,.5);
+  color: var(--gold); padding: 7px 16px; border-radius: 20px;
+  cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif;
+  transition: background .2s;
+}
+#admin-btn:hover { background: rgba(201,168,76,.25); }
+
+/* TOAST */
+#toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--gold); color: var(--green-deep);
+  padding: 12px 28px; border-radius: 30px;
+  font-weight: 600; font-size: 14px; z-index: 500;
+  transition: transform .3s, opacity .3s; opacity: 0;
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+#toast.error { background: #c0392b; color: white; }
+
+/* MAIN */
+main { max-width: 660px; margin: 0 auto; padding: 28px 16px 70px; }
+
+/* CARD */
+.card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(201,168,76,.2);
+  border-radius: 14px; padding: 24px; margin-bottom: 20px;
+}
+.card h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px; color: var(--gold);
+  border-bottom: 1px solid rgba(201,168,76,.18);
+  padding-bottom: 10px; margin-bottom: 16px;
+}
+
+/* SELECT */
+select {
+  width: 100%; padding: 13px 16px;
+  background: rgba(0,0,0,.35); border: 1px solid rgba(201,168,76,.35);
+  border-radius: 9px; color: var(--cream);
+  font-family: 'DM Sans', sans-serif; font-size: 16px;
+  appearance: none; cursor: pointer;
+}
+select option { background: #1a3a1a; }
+
+/* COURSES */
+.rank-note { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.course-list { display: flex; flex-direction: column; gap: 7px; }
+.course-item {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px; padding: 11px 14px;
+  cursor: grab; user-select: none;
+  transition: background .15s, border-color .15s;
+}
+.course-item:hover { background: rgba(201,168,76,.07); border-color: rgba(201,168,76,.25); }
+.course-item.dragging { opacity: .35; }
+.course-item.drag-over { border-color: var(--gold); background: rgba(201,168,76,.12); }
+.rank-badge {
+  width: 27px; height: 27px; border-radius: 50%;
+  background: var(--gold); color: var(--green-deep);
+  font-weight: 700; font-size: 13px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.rank-badge.top3 { background: var(--gold-light); }
+.course-name { flex: 1; font-size: 15px; }
+.drag-handle { color: rgba(255,255,255,.2); font-size: 18px; }
+
+/* DATES */
+.date-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.date-btn {
+  flex: 1 1 calc(33.33% - 9px); min-width: 120px;
+  padding: 11px 8px; border-radius: 9px;
+  border: 1px solid rgba(201,168,76,.28);
+  background: rgba(0,0,0,.2); color: var(--cream);
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  cursor: pointer; text-align: center; transition: all .15s;
+}
+.date-btn:hover:not(.selected) { border-color: var(--gold); background: rgba(201,168,76,.08); }
+.date-btn.selected { background: var(--gold); color: var(--green-deep); border-color: var(--gold); font-weight: 600; }
+
+/* SUBMIT */
+#submit-btn {
+  width: 100%; padding: 17px;
+  background: var(--gold); color: var(--green-deep);
+  border: none; border-radius: 11px;
+  font-family: 'Playfair Display', serif; font-size: 19px;
+  font-weight: 700; letter-spacing: 1px; cursor: pointer;
+  transition: opacity .2s;
+}
+#submit-btn:hover:not(:disabled) { opacity: .88; }
+#submit-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* SUCCESS */
+#success { display: none; text-align: center; padding: 50px 20px; }
+#success .emoji { font-size: 60px; margin-bottom: 16px; }
+#success h2 { font-family: 'Playfair Display', serif; color: var(--gold); font-size: 28px; }
+#success p { color: var(--muted); margin-top: 10px; }
+
+/* ADMIN */
+#admin-view { display: none; max-width: 760px; margin: 0 auto; padding: 24px 16px 70px; }
+.back-link { display: inline-block; margin-bottom: 20px; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+.admin-card { background: rgba(255,255,255,.04); border: 1px solid rgba(201,168,76,.2); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+.admin-card h3 { font-family: 'Playfair Display', serif; color: var(--gold); font-size: 16px; border-bottom: 1px solid rgba(201,168,76,.18); padding-bottom: 9px; margin-bottom: 16px; }
+.cfg-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; margin-top: 14px; }
+.cfg-label:first-child { margin-top: 0; }
+textarea { width: 100%; background: rgba(0,0,0,.3); border: 1px solid rgba(201,168,76,.3); border-radius: 8px; color: var(--cream); font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; resize: vertical; line-height: 1.6; }
+textarea:focus { outline: none; border-color: var(--gold); }
+.save-btn { margin-top: 14px; padding: 11px 26px; background: var(--gold); color: var(--green-deep); border: none; border-radius: 8px; cursor: pointer; font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; transition: opacity .2s; }
+.save-btn:hover { opacity: .85; }
+.save-btn:disabled { opacity: .4; cursor: not-allowed; }
+.info-box { background: rgba(201,168,76,.08); border: 1px solid rgba(201,168,76,.25); border-radius: 8px; padding: 12px 14px; font-size: 13px; color: var(--cream); line-height: 1.6; margin-bottom: 16px; }
+.date-summary { display: flex; flex-direction: column; gap: 9px; }
+.date-row { display: flex; align-items: center; gap: 10px; }
+.date-label { width: 140px; font-size: 13px; flex-shrink: 0; }
+.bar-track { flex: 1; background: rgba(0,0,0,.3); border-radius: 5px; height: 24px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); border-radius: 5px; display: flex; align-items: center; padding-left: 8px; transition: width .5s; }
+.bar-count { font-size: 12px; font-weight: 700; color: var(--green-deep); white-space: nowrap; }
+.bar-names { font-size: 11px; color: var(--muted); margin-left: 8px; }
+.course-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.course-table th { color: var(--gold); font-weight: 500; text-align: left; padding: 7px 10px; border-bottom: 1px solid rgba(201,168,76,.2); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.course-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.course-table tr:last-child td { border-bottom: none; }
+.rank-num { font-family: 'Playfair Display', serif; color: var(--gold); font-size: 17px; font-weight: 700; }
+.resp-item { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.resp-item:last-child { border-bottom: none; padding-bottom: 0; }
+.resp-name { font-weight: 600; color: var(--gold-light); margin-bottom: 3px; }
+.resp-detail { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.no-data { color: var(--muted); font-size: 14px; text-align: center; padding: 20px; }
+.danger-btn { margin-top: 14px; padding: 9px 20px; background: rgba(192,57,43,.12); border: 1px solid rgba(192,57,43,.5); color: #e74c3c; border-radius: 7px; cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif; }
+.danger-btn:hover { background: rgba(192,57,43,.25); }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="loader-icon">&#9971;</div>
+  <p>Loading your trip planner...</p>
+</div>
+
+<div id="toast"></div>
+<button id="admin-btn" onclick="toggleView('admin')">&#9881; Admin</button>
+
+<!-- VOTER VIEW -->
+<div id="voter-view" style="display:none;">
+  <header>
+    <h1>&#9971; Golf Trip Planner</h1>
+    <p id="trip-subtitle">Rank your courses &middot; Pick your dates</p>
+  </header>
+  <main id="voter-main">
+    <div class="card">
+      <h2>Who are you?</h2>
+      <select id="name-select"><option value="">— Select your name —</option></select>
+    </div>
+    <div class="card">
+      <h2>Course Wishlist</h2>
+      <p class="rank-note">Drag to rank — #1 is your top pick</p>
+      <div class="course-list" id="course-list"></div>
+    </div>
+    <div class="card">
+      <h2>Dates I Can Make</h2>
+      <div class="date-grid" id="date-grid"></div>
+    </div>
+    <button id="submit-btn" disabled onclick="submitResponse()">Select your name first</button>
+  </main>
+  <div id="success">
+    <div class="emoji">&#127948;</div>
+    <h2>You're in the book!</h2>
+    <p>Your picks are saved. Pass the link to the rest of the crew.</p>
+  </div>
+</div>
+
+<!-- ADMIN VIEW -->
+<div id="admin-view">
+  <header style="background:linear-gradient(180deg,#060f06,var(--green));border-bottom:2px solid var(--gold);padding:28px 20px 18px;text-align:center;">
+    <h1 style="font-family:'Playfair Display',serif;color:var(--gold);font-size:clamp(22px,5vw,38px);letter-spacing:2px;">Admin Dashboard</h1>
+  </header>
+  <div style="max-width:760px;margin:0 auto;padding:24px 16px 70px;">
+    <span class="back-link" onclick="toggleView('voter')">&larr; Back to voter form</span>
+
+    <div class="admin-card">
+      <h3>&#9881; Configure Trip</h3>
+      <div class="info-box">Edit below and click <strong>Save Configuration</strong>. All changes go live instantly for everyone.</div>
+      <div class="cfg-label">Trip Subtitle</div>
+      <textarea id="cfg-subtitle" rows="2"></textarea>
+      <div class="cfg-label">Player Names — one per line</div>
+      <textarea id="cfg-names" rows="7"></textarea>
+      <div class="cfg-label">Golf Courses — one per line</div>
+      <textarea id="cfg-courses" rows="7"></textarea>
+      <div class="cfg-label">Available Dates — one per line (e.g. Sat Jun 14)</div>
+      <textarea id="cfg-dates" rows="5"></textarea>
+      <br>
+      <button class="save-btn" id="save-config-btn" onclick="saveConfig()">&#128190; Save Configuration</button>
+    </div>
+
+    <div class="admin-card">
+      <h3>&#128197; Date Availability</h3>
+      <div id="date-summary-wrap"><p class="no-data">No responses yet.</p></div>
+    </div>
+
+    <div class="admin-card">
+      <h3>&#9971; Course Priority Rankings</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Lower average rank = more wanted</p>
+      <div id="course-summary-wrap"><p class="no-data">No responses yet.</p></div>
+    </div>
+
+    <div class="admin-card">
+      <h3>&#128100; Individual Responses <span id="resp-count" style="color:var(--muted);font-size:14px;">(0)</span></h3>
+      <div id="individual-wrap"><p class="no-data">No responses yet.</p></div>
+      <button class="danger-btn" onclick="clearResponses()">&#128465; Clear all responses</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+// ══════════════════════════════════════════
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwN_PpWrC0c0W9rA9U1Vgj7hH2X5jPjo_s7HLDRBib9wGuA5cYE4ZaXcOzMNftVyK7X/exec';
+
+// ══════════════════════════════════════════
+// API CALLS
+// ══════════════════════════════════════════
+async function apiGet(type) {
+  var r = await fetch(SCRIPT_URL + '?type=' + type);
+  if (!r.ok) throw new Error('Fetch failed');
+  return r.json();
+}
+
+async function apiPost(body) {
+  var r = await fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('Save failed');
+  return r.json();
+}
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+var DEFAULT_CONFIG = {
+  subtitle: 'Rank your courses - Pick your dates',
+  names:    ['Brian','Mike','Tom','Dave','Steve','Chris','Pat','Jim','Kevin','Bob','Scott','Mark'],
+  courses:  ['Pebble Beach','Whistling Straits','Pinehurst No. 2','Bandon Dunes','Augusta National','TPC Sawgrass','Torrey Pines','Kiawah Island','Bethpage Black','Erin Hills'],
+  dates:    ['Fri Jun 13','Sat Jun 14','Sun Jun 15','Fri Jun 20','Sat Jun 21','Sun Jun 22','Mon Jun 23']
+};
+
+var appConfig = Object.assign({}, DEFAULT_CONFIG);
+var appResponses = {};
+var courseOrder = [];
+var dragSrc = -1;
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+async function init() {
+  try {
+    var data = await apiGet('all');
+    appConfig    = data.config    || DEFAULT_CONFIG;
+    appResponses = data.responses || {};
+  } catch(e) {
+    appConfig    = DEFAULT_CONFIG;
+    appResponses = {};
+  }
+  buildVoterForm();
+  hideLoading();
+  toggleView('voter');
+}
+
+function hideLoading() {
+  var el = document.getElementById('loading-overlay');
+  el.classList.add('hidden');
+  setTimeout(function() { el.style.display = 'none'; }, 500);
+}
+
+// ══════════════════════════════════════════
+// VOTER FORM
+// ══════════════════════════════════════════
+function buildVoterForm() {
+  document.getElementById('trip-subtitle').textContent = appConfig.subtitle || DEFAULT_CONFIG.subtitle;
+  var sel = document.getElementById('name-select');
+  sel.innerHTML = '<option value="">— Select your name —</option>';
+  (appConfig.names || DEFAULT_CONFIG.names).forEach(function(n) {
+    var o = document.createElement('option');
+    o.value = n; o.textContent = n; sel.appendChild(o);
+  });
+  sel.onchange = onNameChange;
+  courseOrder = (appConfig.courses || DEFAULT_CONFIG.courses).slice();
+  renderCourses();
+  var dg = document.getElementById('date-grid');
+  dg.innerHTML = '';
+  (appConfig.dates || DEFAULT_CONFIG.dates).forEach(function(d) {
+    var b = document.createElement('button');
+    b.className = 'date-btn'; b.dataset.date = d; b.textContent = d;
+    b.onclick = function() { b.classList.toggle('selected'); };
+    dg.appendChild(b);
+  });
+}
+
+function onNameChange() {
+  var name = document.getElementById('name-select').value;
+  var btn  = document.getElementById('submit-btn');
+  if (name) {
+    btn.disabled = false; btn.textContent = 'Submit My Picks';
+    var r = appResponses[name];
+    if (r) {
+      if (r.courseOrder) reorderCourses(r.courseOrder);
+      document.querySelectorAll('.date-btn').forEach(function(b) {
+        b.classList.toggle('selected', (r.dates || []).indexOf(b.dataset.date) > -1);
+      });
+    } else {
+      courseOrder = (appConfig.courses || DEFAULT_CONFIG.courses).slice();
+      renderCourses();
+      document.querySelectorAll('.date-btn').forEach(function(b) { b.classList.remove('selected'); });
+    }
+  } else {
+    btn.disabled = true; btn.textContent = 'Select your name first';
+  }
+}
+
+function renderCourses() {
+  var list = document.getElementById('course-list');
+  list.innerHTML = '';
+  courseOrder.forEach(function(c, i) {
+    var item = document.createElement('div');
+    item.className = 'course-item';
+    item.draggable = true;
+    item.innerHTML = '<div class="rank-badge ' + (i < 3 ? 'top3' : '') + '">' + (i+1) + '</div><div class="course-name">' + c + '</div><div class="drag-handle">&#8942;&#8942;</div>';
+    item.addEventListener('dragstart', function(e) { dragSrc = i; item.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    item.addEventListener('dragend',   function() { document.querySelectorAll('.course-item').forEach(function(el) { el.classList.remove('dragging','drag-over'); }); });
+    item.addEventListener('dragover',  function(e) { e.preventDefault(); item.classList.add('drag-over'); });
+    item.addEventListener('dragleave', function() { item.classList.remove('drag-over'); });
+    item.addEventListener('drop', function(e) {
+      e.preventDefault();
+      if (dragSrc !== i) { var tmp = courseOrder[dragSrc]; courseOrder[dragSrc] = courseOrder[i]; courseOrder[i] = tmp; renderCourses(); }
+    });
+    list.appendChild(item);
+  });
+}
+
+function reorderCourses(order) {
+  var all = appConfig.courses || DEFAULT_CONFIG.courses;
+  courseOrder = order.filter(function(c) { return all.indexOf(c) > -1; });
+  all.forEach(function(c) { if (courseOrder.indexOf(c) === -1) courseOrder.push(c); });
+  renderCourses();
+}
+
+async function submitResponse() {
+  var name = document.getElementById('name-select').value;
+  if (!name) return;
+  var dates = Array.from(document.querySelectorAll('.date-btn.selected')).map(function(b) { return b.dataset.date; });
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    await apiPost({ type: 'response', name: name, courseOrder: courseOrder, dates: dates });
+    appResponses[name] = { courseOrder: courseOrder, dates: dates };
+    document.getElementById('voter-main').style.display = 'none';
+    document.getElementById('success').style.display = 'block';
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Submit My Picks';
+    showToast('Could not save — please try again.', true);
+  }
+}
+
+// ══════════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════════
+function loadAdminFields() {
+  document.getElementById('cfg-subtitle').value = appConfig.subtitle || '';
+  document.getElementById('cfg-names').value    = (appConfig.names   || []).join('\n');
+  document.getElementById('cfg-courses').value  = (appConfig.courses || []).join('\n');
+  document.getElementById('cfg-dates').value    = (appConfig.dates   || []).join('\n');
+}
+
+async function refreshAdminData() {
+  try {
+    var data = await apiGet('all');
+    appConfig    = data.config    || DEFAULT_CONFIG;
+    appResponses = data.responses || {};
+    loadAdminFields();
+  } catch(e) {}
+  renderAdminDashboard();
+}
+
+async function saveConfig() {
+  var parse = function(id) {
+    return document.getElementById(id).value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+  };
+  var newCfg = {
+    subtitle: document.getElementById('cfg-subtitle').value.trim() || DEFAULT_CONFIG.subtitle,
+    names:    parse('cfg-names'),
+    courses:  parse('cfg-courses'),
+    dates:    parse('cfg-dates')
+  };
+  var btn = document.getElementById('save-config-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    await apiPost({ type: 'config', data: newCfg });
+    appConfig = newCfg;
+    buildVoterForm();
+    showToast('Configuration saved!');
+  } catch(e) {
+    showToast('Save failed — check your connection.', true);
+  }
+  btn.disabled = false; btn.textContent = '&#128190; Save Configuration';
+}
+
+async function clearResponses() {
+  if (!confirm('Clear ALL responses? This cannot be undone.')) return;
+  try {
+    await apiPost({ type: 'clear_responses' });
+    appResponses = {};
+    renderAdminDashboard();
+    showToast('Responses cleared.');
+  } catch(e) {
+    showToast('Could not clear responses.', true);
+  }
+}
+
+function renderAdminDashboard() {
+  var cfg   = appConfig;
+  var resp  = appResponses;
+  var names = Object.keys(resp);
+  document.getElementById('resp-count').textContent = '(' + names.length + ')';
+
+  // Date availability
+  var dsw = document.getElementById('date-summary-wrap');
+  if (!names.length) { dsw.innerHTML = '<p class="no-data">No responses yet.</p>'; }
+  else {
+    var total = names.length;
+    dsw.innerHTML = '<div class="date-summary">' +
+      (cfg.dates || []).map(function(d) {
+        var who = names.filter(function(n) { return (resp[n].dates || []).indexOf(d) > -1; });
+        var pct = Math.round(who.length / total * 100);
+        return '<div class="date-row"><div class="date-label">' + d + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%">' + (who.length ? '<span class="bar-count">' + who.length + '/' + total + '</span>' : '') + '</div></div><div class="bar-names">' + (who.join(', ') || '—') + '</div></div>';
+      }).join('') + '</div>';
+  }
+
+  // Course priority
+  var csw = document.getElementById('course-summary-wrap');
+  if (!names.length) { csw.innerHTML = '<p class="no-data">No responses yet.</p>'; }
+  else {
+    var scores = {};
+    (cfg.courses || []).forEach(function(c) { scores[c] = { sum: 0, cnt: 0 }; });
+    names.forEach(function(n) {
+      (resp[n].courseOrder || []).forEach(function(c, i) {
+        if (scores[c]) { scores[c].sum += (i + 1); scores[c].cnt++; }
+      });
+    });
+    var sorted = (cfg.courses || []).slice().sort(function(a, b) {
+      var aA = scores[a] && scores[a].cnt ? scores[a].sum / scores[a].cnt : 99;
+      var bA = scores[b] && scores[b].cnt ? scores[b].sum / scores[b].cnt : 99;
+      return aA - bA;
+    });
+    csw.innerHTML = '<table class="course-table"><thead><tr><th>#</th><th>Course</th><th>Avg Rank</th><th>Votes</th></tr></thead><tbody>' +
+      sorted.map(function(c, i) {
+        var avg = scores[c] && scores[c].cnt ? (scores[c].sum / scores[c].cnt).toFixed(1) : '—';
+        return '<tr><td class="rank-num">' + (i+1) + '</td><td>' + c + '</td><td style="color:var(--gold);font-weight:600;">' + avg + '</td><td style="color:var(--muted);">' + (scores[c] ? scores[c].cnt : 0) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  // Individual responses
+  var iw = document.getElementById('individual-wrap');
+  if (!names.length) { iw.innerHTML = '<p class="no-data">No responses yet.</p>'; }
+  else {
+    iw.innerHTML = names.map(function(n) {
+      var r = resp[n];
+      var top3 = (r.courseOrder || []).slice(0, 3).map(function(c, i) { return (i+1) + '. ' + c; }).join(' · ');
+      var dates = (r.dates || []).join(', ') || 'None selected';
+      return '<div class="resp-item"><div class="resp-name">&#128100; ' + n + '</div><div class="resp-detail">Top picks: ' + top3 + '<br>Available: ' + dates + '</div></div>';
+    }).join('');
+  }
+}
+
+// ══════════════════════════════════════════
+// NAVIGATION + TOAST
+// ══════════════════════════════════════════
+function toggleView(view) {
+  document.getElementById('voter-view').style.display = view === 'voter' ? 'block' : 'none';
+  document.getElementById('admin-view').style.display = view === 'admin' ? 'block' : 'none';
+  document.getElementById('admin-btn').textContent    = view === 'admin' ? '✕ Close' : '⚙ Admin';
+  if (view === 'admin') { loadAdminFields(); refreshAdminData(); }
+}
+
+function showToast(msg, isError) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = isError ? 'error show' : 'show';
+  setTimeout(function() { el.className = ''; }, 3500);
+}
+
+init();
+</script>
+</body>
+</html>
