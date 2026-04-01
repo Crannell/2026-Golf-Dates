@@ -1,6 +1,5 @@
-const { getStore } = require("@netlify/blobs");
-
-exports.handler = async (event) => {
+Here it is — select all of this and paste it into GitHub:
+javascriptexports.handler = async (event, context) => {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -12,30 +11,35 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: "" };
   }
 
-  const store = getStore("golf-planner");
+  // Use Netlify Blobs via the context object (no import needed)
+  const { blobs } = context;
 
-  // ── GET: read config or responses ──
+  async function blobGet(key) {
+    try {
+      const store = blobs.store("golf-planner");
+      const result = await store.get(key, { type: "text" });
+      return result;
+    } catch(e) { return null; }
+  }
+
+  async function blobSet(key, value) {
+    const store = blobs.store("golf-planner");
+    await store.set(key, value);
+  }
+
+  // ── GET ──
   if (event.httpMethod === "GET") {
     const type = event.queryStringParameters?.type || "all";
-
     try {
       if (type === "config") {
-        const raw = await store.get("config");
-        if (!raw) return { statusCode: 200, headers, body: JSON.stringify(null) };
-        return { statusCode: 200, headers, body: raw };
+        const raw = await blobGet("config");
+        return { statusCode: 200, headers, body: raw || JSON.stringify(null) };
       }
-
       if (type === "responses") {
-        const raw = await store.get("responses");
-        if (!raw) return { statusCode: 200, headers, body: JSON.stringify({}) };
-        return { statusCode: 200, headers, body: raw };
+        const raw = await blobGet("responses");
+        return { statusCode: 200, headers, body: raw || JSON.stringify({}) };
       }
-
-      // all
-      const [cfgRaw, respRaw] = await Promise.all([
-        store.get("config"),
-        store.get("responses"),
-      ]);
+      const [cfgRaw, respRaw] = await Promise.all([blobGet("config"), blobGet("responses")]);
       return {
         statusCode: 200, headers,
         body: JSON.stringify({
@@ -43,36 +47,32 @@ exports.handler = async (event) => {
           responses: respRaw ? JSON.parse(respRaw) : {},
         }),
       };
-    } catch (e) {
+    } catch(e) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
     }
   }
 
-  // ── POST: save config or a single response ──
+  // ── POST ──
   if (event.httpMethod === "POST") {
     try {
       const body = JSON.parse(event.body || "{}");
-
       if (body.type === "config") {
-        await store.set("config", JSON.stringify(body.data));
+        await blobSet("config", JSON.stringify(body.data));
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
       }
-
       if (body.type === "response") {
-        const raw = await store.get("responses");
+        const raw = await blobGet("responses");
         const responses = raw ? JSON.parse(raw) : {};
         responses[body.name] = { courseOrder: body.courseOrder, dates: body.dates, ts: Date.now() };
-        await store.set("responses", JSON.stringify(responses));
+        await blobSet("responses", JSON.stringify(responses));
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
       }
-
       if (body.type === "clear_responses") {
-        await store.set("responses", JSON.stringify({}));
+        await blobSet("responses", JSON.stringify({}));
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
       }
-
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Unknown type" }) };
-    } catch (e) {
+    } catch(e) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
     }
   }
